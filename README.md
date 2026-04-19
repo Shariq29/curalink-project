@@ -1,6 +1,21 @@
-# Curalink MERN App
+# 🧠 Curalink – AI-Powered Medical Research Assistant
 
-Full-stack MERN scaffold with a React frontend and Node/Express/MongoDB backend.
+Curalink is a full-stack MERN-based application that provides **real-time, research-backed medical insights** using data from PubMed and ClinicalTrials.gov.
+
+Instead of generic AI answers, Curalink delivers **structured, evidence-based responses** including research papers, clinical trials, and sources.
+
+---
+
+# 🚀 Features
+
+* 🔍 Real-time **PubMed research paper retrieval**
+* 🧪 Clinical trials integration (ClinicalTrials.gov)
+* 📊 Smart ranking based on **relevance + recency**
+* 🧠 Context-aware follow-up queries
+* 🎨 Clean ChatGPT-like UI
+* ⚡ Fast and lightweight (no heavy LLM required)
+
+---
 
 ## Structure
 

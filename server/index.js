@@ -3,19 +3,64 @@ import express from 'express';
 import cors from 'cors';
 
 const app = express();
-app.use(cors());
+
+// Middleware
+app.use(cors({
+  origin: "*"
+}));
 app.use(express.json());
 
-// Test route
+// Health check route
 app.get('/', (req, res) => {
-  res.send("Server is running");
+  res.send("Server is running 🚀");
 });
 
-// Example chat route (keep yours if exists)
+// Chat API route
 app.post('/chat', (req, res) => {
-  res.json({ message: "Backend working fine" });
+  const { query } = req.body;
+
+  console.log("Received query:", query);
+
+  // Safety check
+  if (!query) {
+    return res.json({
+      query: "No query received",
+      results: [],
+      summary: {
+        overview: "No query was provided.",
+        key_findings: [],
+        trials: [],
+        sources: []
+      }
+    });
+  }
+
+  // Dummy response (for demo)
+  res.json({
+    query,
+    results: [
+      { type: "paper", title: "Study on Diabetes Treatment (2024)" },
+      { type: "trial", title: "Clinical Trial for Diabetes Drug", status: "Recruiting", location: ["USA"] }
+    ],
+    summary: {
+      overview: `Here is a summary for "${query}". This is a demo medical research response.`,
+      key_findings: [
+        `${query} is actively researched in recent medical studies.`,
+        `New therapies and treatments are being explored for ${query}.`
+      ],
+      trials: [
+        "Trial A - Recruiting - USA",
+        "Trial B - Completed - India"
+      ],
+      sources: [
+        "PubMed Study 2024",
+        "OpenAlex Research Paper 2023"
+      ]
+    }
+  });
 });
 
+// Start server
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

@@ -1,66 +1,81 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import fetch from 'node-fetch';
 
 const app = express();
 
-// Middleware
-app.use(cors({
-  origin: "*"
-}));
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// Health check route
+// Health route
 app.get('/', (req, res) => {
   res.send("Server is running 🚀");
 });
 
-// Chat API route
-app.post('/chat', (req, res) => {
+// 🔥 PubMed fetch function
+async function fetchPubMed(query) {
+  try {
+    // Step 1: search IDs
+    const searchRes = await fetch(
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${query}&retmode=json&retmax=5`
+    );
+    const searchData = await searchRes.json();
+
+    const ids = searchData.esearchresult.idlist;
+
+    if (!ids.length) return [];
+
+    // Step 2: fetch details
+    const fetchRes = await fetch(
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(",")}&retmode=json`
+    );
+    const fetchData = await fetchRes.json();
+
+    const results = ids.map(id => {
+      const item = fetchData.result[id];
+      return {
+        title: item.title,
+        authors: item.authors?.map(a => a.name).join(", "),
+        journal: item.fulljournalname,
+        date: item.pubdate
+      };
+    });
+
+    return results;
+  } catch (error) {
+    console.error("PubMed error:", error);
+    return [];
+  }
+}
+
+// Chat route
+app.post('/chat', async (req, res) => {
   const { query } = req.body;
 
-  console.log("Received query:", query);
-
-  // Safety check
   if (!query) {
     return res.json({
-      query: "No query received",
+      query: "No query",
       results: [],
-      summary: {
-        overview: "No query was provided.",
-        key_findings: [],
-        trials: [],
-        sources: []
-      }
+      summary: {}
     });
   }
 
-  // Dummy response (for demo)
+  // 🔥 Fetch real PubMed data
+  const papers = await fetchPubMed(query);
+
   res.json({
     query,
-    results: [
-      { type: "paper", title: "Study on Diabetes Treatment (2024)" },
-      { type: "trial", title: "Clinical Trial for Diabetes Drug", status: "Recruiting", location: ["USA"] }
-    ],
+    results: papers,
     summary: {
-      overview: `Here is a summary for "${query}". This is a demo medical research response.`,
-      key_findings: [
-        `${query} is actively researched in recent medical studies.`,
-        `New therapies and treatments are being explored for ${query}.`
-      ],
-      trials: [
-        "Trial A - Recruiting - USA",
-        "Trial B - Completed - India"
-      ],
-      sources: [
-        "PubMed Study 2024",
-        "OpenAlex Research Paper 2023"
-      ]
+      overview: `Found ${papers.length} research papers for "${query}".`,
+      key_findings: papers.map(p => p.title),
+      trials: [],
+      sources: papers.map(p => `${p.journal} (${p.date})`)
     }
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

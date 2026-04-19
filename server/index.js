@@ -17,7 +17,7 @@ async function fetchPubMed(query) {
   try {
     // Step 1: Search IDs
     const searchRes = await fetch(
-      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmode=json&retmax=10`
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmode=json&retmax=25`
     );
 
     const searchData = await searchRes.json();
@@ -45,13 +45,20 @@ async function fetchPubMed(query) {
       };
     });
 
-    // 🔥 FILTER (relevant only)
+    // 🔥 SMART FILTER (keyword-based)
+    const keywords = query.toLowerCase().split(" ");
+
     papers = papers.filter(p =>
-      p.title.toLowerCase().includes(query.toLowerCase())
+      keywords.some(word =>
+        p.title.toLowerCase().includes(word)
+      )
     );
 
     // 🔥 SORT (latest first)
     papers.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // 🔥 LIMIT RESULTS
+    papers = papers.slice(0, 5);
 
     return papers;
 
@@ -87,10 +94,10 @@ app.post('/chat', async (req, res) => {
     results: papers,
 
     summary: {
-      overview: `Here are the latest research insights on "${query}" from PubMed.`,
+      overview: `Here are the latest research insights on "${query}" based on recent PubMed publications.`,
 
       key_findings: papers.map((p, i) =>
-        `${i + 1}. ${p.title}`
+        `${i + 1}. ${p.title} — This study provides insights related to ${query}, including diagnosis, treatment, or associated conditions.`
       ),
 
       trials: [],

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+server/.env
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Microsoft/
+__pycache__/
+.venv/

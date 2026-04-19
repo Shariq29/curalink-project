@@ -1,20 +1,23 @@
 import 'dotenv/config';
-import app from './app.js';
-import { connectDatabase } from './lib/db.js';
+import express from 'express';
+import cors from 'cors';
 
-const port = process.env.PORT || 5000;
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-async function startServer() {
-  try {
-    await connectDatabase(process.env.MONGODB_URI);
+// Test route
+app.get('/', (req, res) => {
+  res.send("Server is running");
+});
 
-    app.listen(port, () => {
-      console.log(`API server listening on port ${port}`);
-    });
-  } catch (error) {
-    console.error('Failed to start API server:', error);
-    process.exit(1);
-  }
-}
+// Example chat route (keep yours if exists)
+app.post('/chat', (req, res) => {
+  res.json({ message: "Backend working fine" });
+});
 
-startServer();
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

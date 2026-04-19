@@ -2,11 +2,11 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import chatRouter from './routes/chat.js';
-import clinicalTrialsRouter from './routes/clinicalTrials.js';
-import healthRouter from './routes/health.js';
-import pubmedRouter from './routes/pubmed.js';
-import searchRouter from './routes/search.js';
+import chatRouter from './src/routes/chat.js';
+import clinicalTrialsRouter from './src/routes/clinicalTrials.js';
+import healthRouter from './src/routes/health.js';
+import pubmedRouter from './src/routes/pubmed.js';
+import searchRouter from './src/routes/search.js';
 
 const app = express();
 const clientOrigins = (process.env.CLIENT_ORIGINS || process.env.CLIENT_ORIGIN || 'http://localhost:5173')
@@ -26,6 +26,10 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(morgan('dev'));
+
+app.get('/', (req, res) => {
+  res.send('Server is running');
+});
 
 app.use('/chat', chatRouter);
 app.use('/api/health', healthRouter);

@@ -18,7 +18,7 @@ export async function searchAndRank(query) {
     const ranked = combined.sort((a, b) => (b.year || 0) - (a.year || 0));
     return ranked.slice(0, 10);
   } catch (error) {
-    console.error("[Ranking Pipeline Error]:", error.message);
+    console.error("[Ranking Pipeline Error]:", error.stack || error);
     return [];
   }
 }

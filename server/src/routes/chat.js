@@ -77,7 +77,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error("[POST /chat] Fatal Error:", error);
+    console.error("[POST /chat] Fatal Error:", error.stack || error);
 
     return res.status(500).json({
       message: error.message || "Something went wrong while fetching research data.",

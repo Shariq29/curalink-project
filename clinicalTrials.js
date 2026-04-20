@@ -25,7 +25,7 @@ export async function fetchTrials(query) {
       };
     });
   } catch (error) {
-    console.error("[ClinicalTrials API Error]:", error.message);
+    console.error("[ClinicalTrials API Error]:", error.stack || error);
     return [];
   }
 }

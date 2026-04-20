@@ -32,7 +32,7 @@ export async function fetchPubMed(query) {
       };
     }).filter(Boolean);
   } catch (error) {
-    console.error("[PubMed API Error]:", error.message);
+    console.error("[PubMed API Error]:", error.stack || error);
     return [];
   }
 }

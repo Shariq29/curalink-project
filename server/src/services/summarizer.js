@@ -84,6 +84,8 @@ export async function summarizeResults(query, context) {
       throw new Error('Groq API returned an empty response.');
     }
 
+    console.log('[Summarizer Service] Received raw content from Groq API.');
+
     // Robust JSON parsing (handles edge cases where LLMs wrap the output in markdown block)
     const cleanJsonString = content.replace(/```json/gi, '').replace(/```/gi, '').trim();
     const parsed = JSON.parse(cleanJsonString);
@@ -96,7 +98,7 @@ export async function summarizeResults(query, context) {
       return null;
     }
   } catch (error) {
-    console.error('[Summarizer Service Error]:', error.message);
+    console.error('[Summarizer Service Error]:', error.stack || error);
     if (error.response) {
       console.error('[Groq API Response Payload]:', error.response.data);
     }

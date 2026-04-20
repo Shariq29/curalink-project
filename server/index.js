@@ -24,6 +24,12 @@ app.use(cors({
 
 app.use(express.json());
 
+/* ------------------ REQUEST LOGGER ------------------ */
+app.use((req, res, next) => {
+  console.log(`[Request Logger] ${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 /* ------------------ ROUTES ------------------ */
 app.use('/chat', chatRouter);
 

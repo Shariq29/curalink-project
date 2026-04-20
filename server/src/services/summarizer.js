@@ -79,6 +79,8 @@ export async function summarizeResults(query, context) {
       response_format: { type: 'json_object' }
     });
 
+    console.log('[Summarizer] Raw Groq response:', chatCompletion.choices[0]?.message?.content);
+
     const content = chatCompletion.choices[0]?.message?.content;
     if (!content) {
       throw new Error('Groq API returned an empty response.');
@@ -86,9 +88,20 @@ export async function summarizeResults(query, context) {
 
     console.log('[Summarizer Service] Received raw content from Groq API.');
 
-    // Robust JSON parsing (handles edge cases where LLMs wrap the output in markdown block)
-    const cleanJsonString = content.replace(/```json/gi, '').replace(/```/gi, '').trim();
-    const parsed = JSON.parse(cleanJsonString);
+    const cleanJsonString = content
+  .replace(/```json/gi, '')
+  .replace(/```/gi, '')
+  .trim();
+
+let parsed;
+
+try {
+  parsed = JSON.parse(cleanJsonString);
+} catch (e) {
+  console.error('[Summarizer] JSON parse failed:', e);
+  console.error('[Summarizer] Raw content:', content);
+  return null;
+}
 
     if (parsed && parsed.overview && Array.isArray(parsed.key_findings)) {
       console.log('[Summarizer Service] Successfully generated and parsed Groq summary.');

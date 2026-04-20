@@ -1,4 +1,6 @@
 import Groq from 'groq-sdk';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const MODEL = 'mixtral-8x7b-32768';
@@ -7,9 +9,7 @@ let groq;
 if (GROQ_API_KEY) {
   groq = new Groq({ apiKey: GROQ_API_KEY });
 } else {
-  console.warn(
-    'GROQ_API_KEY not found. Summarizer service will be disabled.'
-  );
+  console.error('[Summarizer Service] GROQ_API_KEY is missing from environment variables.');
 }
 
 function buildPrompt(query, context) {
@@ -33,7 +33,7 @@ ${contextString}
 
 ---
 
-Based strictly on the context above, generate a response in a valid JSON format. Do not include any text or markdown formatting before or after the JSON object. The JSON object must have the following structure:
+Based strictly on the context above, generate a response in a valid JSON format. Provide ONLY the JSON object. Do not include any markdown formatting, backticks, or conversational text. The JSON object must strictly match this exact structure:
 {
   "overview": "A brief, one-to-two sentence neutral overview of the available research for the query.",
   "key_findings": [
@@ -55,15 +55,18 @@ Based strictly on the context above, generate a response in a valid JSON format.
  */
 export async function summarizeResults(query, context) {
   if (!groq) {
-    console.error('Groq client not initialized. Cannot generate summary.');
+    console.warn('[Summarizer Service] Groq client not initialized. Falling back to default safety summary.');
     return null;
   }
 
   if (!context || context.length === 0) {
+    console.warn('[Summarizer Service] No context provided to summarize.');
     return null;
   }
 
   try {
+    console.log(`[Summarizer Service] Sending request to Groq API for: "${query}"`);
+
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         {
@@ -81,16 +84,22 @@ export async function summarizeResults(query, context) {
       throw new Error('Groq API returned an empty response.');
     }
 
-    const parsed = JSON.parse(content);
+    // Robust JSON parsing (handles edge cases where LLMs wrap the output in markdown block)
+    const cleanJsonString = content.replace(/```json/gi, '').replace(/```/gi, '').trim();
+    const parsed = JSON.parse(cleanJsonString);
 
     if (parsed && parsed.overview && Array.isArray(parsed.key_findings)) {
+      console.log('[Summarizer Service] Successfully generated and parsed Groq summary.');
       return parsed;
     } else {
-      console.error('Groq API response did not match the expected structure.', parsed);
+      console.error('[Summarizer Service] Groq API response did not match the expected JSON schema.', parsed);
       return null;
     }
   } catch (error) {
-    console.error('Error calling Groq API:', error.message);
+    console.error('[Summarizer Service Error]:', error.message);
+    if (error.response) {
+      console.error('[Groq API Response Payload]:', error.response.data);
+    }
     return null;
   }
 }

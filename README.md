@@ -53,7 +53,6 @@ For production, copy the production examples and replace the placeholder domains
 ```bash
 cp client/.env.production.example client/.env.production
 cp server/.env.production.example server/.env.production
-cp llm-service/.env.production.example llm-service/.env.production
 ```
 
 ## Development

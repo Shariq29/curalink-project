@@ -177,7 +177,9 @@ function App() {
       if (inferred) setDisease(inferred);
 
     } catch (e) {
-      setError("Backend error");
+      console.error("[Frontend Error] API Request Failed:", e);
+      const errDetail = e.response?.data?.message || e.message || "Unknown error";
+      setError(`Backend error: ${errDetail}`);
     }
 
     setLoading(false);

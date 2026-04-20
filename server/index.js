@@ -3,6 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import chatRouter from './src/routes/chat.js';
 
+// Debug log to verify .env loading 
+console.log(`[Server Setup] Initializing server. Environment loaded. API Key Status: ${process.env.GROQ_API_KEY ? 'Present' : 'Missing'}`);
+
 const app = express();
 
 /* ------------------ CORS ------------------ */
@@ -28,8 +31,8 @@ app.get('/', (req, res) => {
 });
 
 /* ------------------ START SERVER ------------------ */
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001; // Avoid common frontend port collision
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`[Express] Server running on port ${PORT}`);
 });

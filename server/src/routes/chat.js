@@ -4,39 +4,80 @@ import { summarizeResults } from '../services/summarizer.js';
 
 const router = Router();
 
-function compactResult(result) {
+/* ------------------ CLEAN RESULT FORMAT ------------------ */
+function formatResult(result) {
   return {
-    source: result.source,
-    type: result.type,
-    title: result.title,
-    year: result.year,
-    score: result.score,
-    status: result.status,
-    location: result.location,
-    authors: result.authors?.slice(0, 5)
+    source: result.source || "Unknown",
+    type: result.type || "paper",
+    title: result.title || "No title",
+    year: result.year || null,
+    score: result.score || 0,
+    status: result.status || null,
+    location: result.location || null,
+    authors: result.authors?.slice(0, 5) || []
   };
 }
 
-router.post('/', async (req, res, next) => {
+/* ------------------ CHAT ROUTE ------------------ */
+router.post('/', async (req, res) => {
   try {
     const query = String(req.body.query || req.body.message || '').trim();
 
     if (!query) {
       return res.status(400).json({
-        error: 'A query is required.'
+        summary: {
+          overview: "No query provided",
+          key_findings: [],
+          sources: []
+        },
+        results: []
       });
     }
 
+    /* ------------------ RETRIEVAL ------------------ */
     const rankedResults = await searchAndRank(query);
+
+    /* ------------------ SUMMARIZATION ------------------ */
     const summary = await summarizeResults(query, rankedResults);
 
+    /* ------------------ FALLBACK SAFETY ------------------ */
+    const safeSummary = {
+      overview:
+        summary?.overview ||
+        `Here are research-backed insights for "${query}".`,
+
+      key_findings:
+        summary?.key_findings?.length
+          ? summary.key_findings
+          : rankedResults.slice(0, 5).map((r, i) =>
+              `${i + 1}. ${r.title} — Relevant research related to ${query}.`
+            ),
+
+      sources:
+        summary?.sources?.length
+          ? summary.sources
+          : rankedResults
+              .filter(r => r.source)
+              .map(r => `${r.source} (${r.year || "N/A"})`)
+    };
+
+    /* ------------------ RESPONSE ------------------ */
     return res.json({
-      query,
-      summary,
-      results: rankedResults.map(compactResult)
+      summary: safeSummary,
+      results: rankedResults.map(formatResult)
     });
+
   } catch (error) {
-    return next(error);
+    console.error("Chat route error:", error);
+
+    return res.status(500).json({
+      summary: {
+        overview: "Something went wrong while fetching research data.",
+        key_findings: [],
+        sources: []
+      },
+      results: []
+    });
   }
 });
 

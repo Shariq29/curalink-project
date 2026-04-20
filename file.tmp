@@ -1,0 +1,146 @@
+# 🧠 Curalink – AI-Powered Medical Research Assistant
+
+Curalink is a full-stack MERN-based application that provides **real-time, research-backed medical insights** using data from PubMed and ClinicalTrials.gov.
+
+Instead of generic AI answers, Curalink delivers **structured, evidence-based responses** including research papers, clinical trials, and sources.
+
+---
+
+# 🚀 Features
+
+* 🔍 Real-time **PubMed research paper retrieval**
+* 🧪 Clinical trials integration (ClinicalTrials.gov)
+* 📊 Smart ranking based on **relevance + recency**
+* 🧠 Context-aware follow-up queries
+* 🎨 Clean ChatGPT-like UI
+* ⚡ Fast and lightweight (no heavy LLM required)
+
+---
+
+## Structure
+
+```text
+client/   React + Vite frontend
+server/   Express + Mongoose backend
+```
+
+## Setup
+
+Install dependencies:
+
+```bash
+npm run install:all
+```
+
+Create a server environment file:
+
+```bash
+cp server/.env.example server/.env
+```
+
+Update `server/.env` with your MongoDB connection string.
+
+Create a client environment file:
+
+```bash
+cp client/.env.example client/.env
+```
+
+For local development, the defaults point to the local Express API.
+
+For production, copy the production examples and replace the placeholder domains:
+
+```bash
+cp client/.env.production.example client/.env.production
+cp server/.env.production.example server/.env.production
+cp llm-service/.env.production.example llm-service/.env.production
+```
+
+## Development
+
+Run the frontend and backend together:
+
+```bash
+npm run dev
+```
+
+Frontend: `http://localhost:5173`
+
+Backend health check: `http://localhost:5000/api/health`
+
+Chat endpoint:
+
+```bash
+curl -X POST http://localhost:5000/chat \
+  -H "Content-Type: application/json" \
+  -d "{\"query\":\"diabetes\"}"
+```
+
+The chat endpoint fetches PubMed and ClinicalTrials.gov data, ranks the merged results, sends the top 10 to the Groq API for summarization, and returns a structured summary with the ranked context.
+
+PubMed search endpoint:
+
+```bash
+curl "http://localhost:5000/api/pubmed?query=diabetes"
+```
+
+The PubMed endpoint returns up to 50 results with `title`, `abstract`, `authors`,
+and `year`.
+
+ClinicalTrials.gov search endpoint:
+
+```bash
+curl "http://localhost:5000/api/clinical-trials?query=diabetes"
+```
+
+The clinical trials endpoint returns up to 20 trials with `title`, `status`,
+and `location`.
+
+Merged ranked search endpoint:
+
+```bash
+curl "http://localhost:5000/api/search?query=diabetes"
+```
+
+The ranked search endpoint merges PubMed and ClinicalTrials.gov results, sorts
+by relevance and recency, and returns the top 10.
+
+## Deployment
+
+This project is optimized for deployment on Vercel (frontend) and Render (backend).
+
+### Frontend (Vercel)
+
+1.  Connect your Git repository to Vercel.
+2.  Set the **Root Directory** to `client`.
+3.  Vercel will auto-detect the Vite framework and settings.
+4.  Add the following environment variable:
+    -   `VITE_API_URL`: The URL of your deployed backend (e.g., `https://curalink-api.onrender.com`).
+
+### Backend (Render)
+
+1.  Create a new **Web Service** on Render and connect your Git repository.
+2.  Set the **Root Directory** to `server`.
+3.  Set the **Build Command** to `npm install`.
+4.  Set the **Start Command** to `npm start`.
+5.  Add the following environment variables:
+    -   `CLIENT_ORIGINS`: The URL of your deployed frontend (e.g., `https://your-app.vercel.app`).
+    -   `MONGODB_URI`: Your production MongoDB connection string.
+    -   `GROQ_API_KEY`: Your Groq API key.
+
+---
+
+Production request flow:
+
+```text
+React frontend -> Express backend /chat -> Groq API
+```
+
+## Scripts
+
+- `npm run dev` - start client and server in development mode
+- `npm run client:dev` - start only the React app
+- `npm run server:dev` - start only the API server
+- `npm run client:build` - build the React app
+- `npm run server:start` - start the API server without nodemon
+- `npm run install:all` - install root, client, and server dependencies

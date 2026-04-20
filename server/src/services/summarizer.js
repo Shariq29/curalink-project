@@ -1,120 +1,107 @@
-import Groq from 'groq-sdk';
-import dotenv from 'dotenv';
+import Groq from "groq-sdk";
+import dotenv from "dotenv";
+
 dotenv.config();
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const MODEL = 'mixtral-8x7b-32768';
+const MODEL = "mixtral-8x7b-32768";
 
-let groq;
+let groq = null;
+
 if (GROQ_API_KEY) {
   groq = new Groq({ apiKey: GROQ_API_KEY });
+  console.log("[Summarizer] Groq initialized");
 } else {
-  console.error('[Summarizer Service] GROQ_API_KEY is missing from environment variables.');
+  console.error("[Summarizer] ❌ GROQ_API_KEY missing");
 }
 
+/* ------------------ PROMPT ------------------ */
 function buildPrompt(query, context) {
   const contextString = context
     .map(
       (item) => `
-- Type: ${item.type}
-- Source: ${item.source}
 - Title: ${item.title}
+- Source: ${item.source}
 - Year: ${item.year}
-- Summary: ${item.summary || item.abstract || 'N/A'}`
+- Summary: ${item.summary || item.abstract || "N/A"}`
     )
-    .join('');
+    .join("\n");
 
-  return `You are an expert medical research assistant. Your task is to provide a concise, evidence-based summary based on the provided research context. The user is asking about "${query}".
+  return `
+You are a medical research assistant.
 
-Analyze the following research data. Use ONLY the information from the provided context. Do not add any external knowledge or hallucinate.
+User Query: ${query}
 
-Context:
+Use ONLY the data below.
+
 ${contextString}
 
----
-
-Based strictly on the context above, generate a response in a valid JSON format. Provide ONLY the JSON object. Do not include any markdown formatting, backticks, or conversational text. The JSON object must strictly match this exact structure:
+Return STRICT JSON:
 {
-  "overview": "A brief, one-to-two sentence neutral overview of the available research for the query.",
-  "key_findings": [
-    "A key insight or finding, summarized in one sentence.",
-    "Another key insight or finding, summarized in one sentence.",
-    "A third key insight or finding, summarized in one sentence."
-  ],
-  "sources": [
-    "Source Title (Year)",
-    "Another Source Title (Year)"
-  ]
-}`;
+  "overview": "...",
+  "key_findings": ["...", "..."],
+  "sources": ["..."]
 }
 
-/**
- * @param {string} query The user's search query.
- * @param {Array<object>} context The ranked search results.
- * @returns {Promise<object|null>} A structured summary or null if an error occurs.
- */
+NO text outside JSON.
+`;
+}
+
+/* ------------------ MAIN FUNCTION ------------------ */
 export async function summarizeResults(query, context) {
+  console.log("===== SUMMARIZER START =====");
+
   if (!groq) {
-    console.warn('[Summarizer Service] Groq client not initialized. Falling back to default safety summary.');
+    console.error("❌ Groq not initialized");
     return null;
   }
 
   if (!context || context.length === 0) {
-    console.warn('[Summarizer Service] No context provided to summarize.');
+    console.warn("⚠️ No context");
     return null;
   }
 
   try {
-    console.log(`[Summarizer Service] Sending request to Groq API for: "${query}"`);
-
-    const chatCompletion = await groq.chat.completions.create({
+    const response = await groq.chat.completions.create({
+      model: MODEL,
       messages: [
         {
-          role: 'user',
-          content: buildPrompt(query, context)
-        }
+          role: "user",
+          content: buildPrompt(query, context),
+        },
       ],
-      model: MODEL,
       temperature: 0.2,
-      response_format: { type: 'json_object' }
     });
 
-    console.log('[Summarizer] Raw Groq response:', chatCompletion.choices[0]?.message?.content);
+    const content = response.choices?.[0]?.message?.content;
 
-    const content = chatCompletion.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('Groq API returned an empty response.');
-    }
+    console.log("🧠 RAW GROQ:", content);
 
-    console.log('[Summarizer Service] Received raw content from Groq API.');
+    if (!content) return null;
 
-    const cleanJsonString = content
-  .replace(/```json/gi, '')
-  .replace(/```/gi, '')
-  .trim();
+    // CLEAN RESPONSE
+    const clean = content
+      .replace(/```json/gi, "")
+      .replace(/```/gi, "")
+      .trim();
 
-let parsed;
+    let parsed;
 
-try {
-  parsed = JSON.parse(cleanJsonString);
-} catch (e) {
-  console.error('[Summarizer] JSON parse failed:', e);
-  console.error('[Summarizer] Raw content:', content);
-  return null;
-}
-
-    if (parsed && parsed.overview && Array.isArray(parsed.key_findings)) {
-      console.log('[Summarizer Service] Successfully generated and parsed Groq summary.');
-      return parsed;
-    } else {
-      console.error('[Summarizer Service] Groq API response did not match the expected JSON schema.', parsed);
+    try {
+      parsed = JSON.parse(clean);
+    } catch (err) {
+      console.error("❌ JSON parse failed:", err);
       return null;
     }
+
+    if (!parsed.overview) return null;
+
+    console.log("✅ GROQ SUCCESS");
+
+    return parsed;
+
   } catch (error) {
-    console.error('[Summarizer Service Error]:', error.stack || error);
-    if (error.response) {
-      console.error('[Groq API Response Payload]:', error.response.data);
-    }
+    console.error("❌ GROQ ERROR:", error.message);
     return null;
   }
 }

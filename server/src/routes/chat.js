@@ -1,92 +1,71 @@
-import { Router } from 'express';
-import { searchAndRank } from '../services/rankedSearch.js';
-import { summarizeResults } from '../services/summarizer.js';
+import { Router } from "express";
+import { searchAndRank } from "../services/rankedSearch.js";
+import { summarizeResults } from "../services/summarizer.js";
 
 const router = Router();
 
-/* ------------------ CLEAN RESULT FORMAT ------------------ */
-function formatResult(result) {
+/* ------------------ FALLBACK ------------------ */
+function fallbackSummary(query, results) {
   return {
-    source: result.source || "Unknown",
-    type: result.type || "paper",
-    title: result.title || "No title",
-    year: result.year || null,
-    score: result.score || 0,
-    status: result.status || null,
-    location: result.location || null,
-    authors: result.authors?.slice(0, 5) || []
+    overview: `Here are research-backed insights for "${query}".`,
+    key_findings: results.slice(0, 5).map(
+      (r, i) => `${i + 1}. ${r.title} — Relevant research related to ${query}.`
+    ),
+    sources: results.map(
+      (r) => `${r.source} (${r.year || "N/A"})`
+    ),
   };
 }
 
-/* ------------------ CHAT ROUTE ------------------ */
-router.post('/', async (req, res) => {
-  console.log(`\n[POST /chat] Received request from client`);
+/* ------------------ ROUTE ------------------ */
+router.post("/", async (req, res) => {
   try {
-    const query = String(req.body.query || req.body.message || '').trim();
+    const query = String(req.body.query || "").trim();
+
+    console.log("📥 Incoming query:", query);
 
     if (!query) {
-      console.warn(`[POST /chat] Blocked request with empty query.`);
       return res.status(400).json({
-        summary: {
-          overview: "No query provided",
-          key_findings: [],
-          sources: []
-        },
-        results: []
+        summary: fallbackSummary("empty", []),
+        results: [],
       });
     }
 
-    /* ------------------ RETRIEVAL ------------------ */
-    console.log(`[POST /chat] Starting retrieval for query: "${query}"`);
+    /* ---------- STEP 1: FETCH ---------- */
     const rankedResults = await searchAndRank(query);
 
-    if (!rankedResults || rankedResults.length === 0) {
-      console.warn(`[POST /chat] No results found for query: "${query}"`);
-    }
+    console.log("📊 Results fetched:", rankedResults.length);
 
-    /* ------------------ SUMMARIZATION ------------------ */
-    console.log(`[POST /chat] Starting summarization...`);
+    /* ---------- STEP 2: AI SUMMARY ---------- */
     const summary = await summarizeResults(query, rankedResults);
 
-    /* ------------------ FALLBACK SAFETY ------------------ */
-    const safeSummary = {
-      overview:
-        summary?.overview ||
-        `Here are research-backed insights for "${query}".`,
+    /* ---------- STEP 3: RESPONSE ---------- */
+    if (!summary) {
+      console.warn("⚠️ Using fallback summary");
 
-      key_findings:
-        summary?.key_findings?.length
-          ? summary.key_findings
-          : rankedResults.slice(0, 3).map((r, i) =>
-              `${i + 1}. ${r.title} — Relevant research related to ${query}.`
-            ),
+      return res.json({
+        summary: fallbackSummary(query, rankedResults),
+        results: rankedResults,
+      });
+    }
 
-      sources:
-        summary?.sources?.length
-          ? summary.sources
-          : rankedResults
-              .filter(r => r.source)
-              .map(r => `${r.source} (${r.year || "N/A"})`)
-    };
+    console.log("✅ Using AI summary");
 
-    /* ------------------ RESPONSE ------------------ */
-    console.log(`[POST /chat] Successfully completed processing. Returning response.`);
     return res.json({
-      summary: safeSummary,
-      results: rankedResults.map(formatResult)
+      summary,
+      results: rankedResults,
     });
 
   } catch (error) {
-    console.error("[POST /chat] Fatal Error:", error.stack || error);
+    console.error("❌ CHAT ERROR:", error);
 
     return res.status(500).json({
-      message: error.message || "Something went wrong while fetching research data.",
       summary: {
-        overview: "Something went wrong while fetching research data.",
+        overview: "Server error occurred",
         key_findings: [],
-        sources: []
+        sources: [],
       },
-      results: []
+      results: [],
     });
   }
 });

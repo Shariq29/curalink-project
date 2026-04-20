@@ -1,344 +1,241 @@
-import { useEffect, useRef, useState } from 'react';
-import api from './lib/api';
+import { useEffect, useRef, useState } from "react";
+import api from "./lib/api";
 
+/* ------------------ INITIAL MESSAGE ------------------ */
 const starterMessages = [
   {
     id: crypto.randomUUID(),
-    role: 'assistant',
-    content: 'Ask about a condition or therapy and I will pull research papers, clinical trials, and a concise evidence summary.'
+    role: "assistant",
+    content:
+      "Ask about a condition or therapy. I’ll fetch research papers, clinical trials, and give a structured evidence-based summary."
   }
 ];
 
+/* ------------------ QUERY HELPERS ------------------ */
 const followUpTerms = [
-  'treatment',
-  'treatments',
-  'therapy',
-  'therapies',
-  'drug',
-  'drugs',
-  'trial',
-  'trials',
-  'symptoms',
-  'causes',
-  'risk',
-  'diagnosis',
-  'latest',
-  'papers',
-  'research'
+  "treatment",
+  "therapy",
+  "drug",
+  "trial",
+  "symptoms",
+  "causes",
+  "risk",
+  "diagnosis",
+  "latest",
+  "research"
 ];
 
 const fillerWords = new Set([
-  'about',
-  'and',
-  'any',
-  'are',
-  'best',
-  'can',
-  'clinical',
-  'current',
-  'for',
-  'give',
-  'how',
-  'in',
-  'is',
-  'latest',
-  'me',
-  'new',
-  'of',
-  'on',
-  'papers',
-  'research',
-  'show',
-  'studies',
-  'study',
-  'tell',
-  'the',
-  'therapy',
-  'therapies',
-  'treatment',
-  'treatments',
-  'trial',
-  'trials',
-  'what',
-  'with'
+  "about", "and", "are", "can", "for", "how", "in", "is",
+  "of", "on", "the", "what", "with"
 ]);
 
-function getQueryTokens(value) {
-  return value
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
+function getTokens(text) {
+  return text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 
-function isFollowUpQuery(value) {
-  const lowerValue = value.toLowerCase();
-  const tokens = getQueryTokens(value);
+function inferDisease(text) {
+  return getTokens(text)
+    .filter(t => t.length > 2 && !fillerWords.has(t))
+    .slice(0, 3)
+    .join(" ");
+}
 
+function isFollowUp(text) {
+  const lower = text.toLowerCase();
+  return followUpTerms.some(t => lower.includes(t)) || text.length < 40;
+}
+
+function buildQuery(text, disease) {
+  if (!disease || !isFollowUp(text)) return text;
+  if (text.toLowerCase().includes(disease)) return text;
+  return `${disease} ${text}`;
+}
+
+/* ------------------ UI COMPONENTS ------------------ */
+
+function Section({ title, children }) {
   return (
-    tokens.length <= 6
-    || followUpTerms.some((term) => lowerValue.includes(term))
-    || /^(what|how|any|show|give|tell)\b/.test(lowerValue)
+    <div style={styles.section}>
+      <h3 style={styles.sectionTitle}>{title}</h3>
+      {children}
+    </div>
   );
 }
 
-function inferDisease(value) {
-  const tokens = getQueryTokens(value)
-    .filter((token) => token.length > 2 && !fillerWords.has(token));
-
-  if (!tokens.length) {
-    return '';
-  }
-
-  return tokens.slice(0, 4).join(' ');
-}
-
-function buildEffectiveQuery(value, rememberedDisease) {
-  if (!rememberedDisease || !isFollowUpQuery(value)) {
-    return value;
-  }
-
-  const lowerValue = value.toLowerCase();
-
-  if (lowerValue.includes(rememberedDisease.toLowerCase())) {
-    return value;
-  }
-
-  return `${rememberedDisease} ${value}`;
-}
-
-function ClinicalTrials({ summary, results }) {
-  const rankedTrials = results
-    .filter((result) => result.type === 'trial')
-    .map((trial) => {
-      const location = trial.location?.[0] || 'location unavailable';
-      const status = trial.status || 'status unavailable';
-
-      return `${trial.title} - ${status}; ${location}`;
-    });
-  const trials = rankedTrials.length ? rankedTrials : summary?.trials || [];
-
-  if (!trials.length) {
-    return <p>No matching trials appeared in the top ranked results.</p>;
-  }
+function Sources({ sources }) {
+  if (!sources?.length) return <p>No sources available.</p>;
 
   return (
     <ul>
-      {trials.map((trial) => (
-        <li key={trial}>{trial}</li>
+      {sources.map((s, i) => (
+        <li key={i}>{s}</li>
       ))}
     </ul>
   );
 }
 
-function ResearchInsights({ summary }) {
-  if (!summary.key_findings?.length) {
-    return <p>No specific research insights were extracted from the top papers.</p>;
-  }
+function Trials({ results }) {
+  const trials = results?.filter(r => r.source === "ClinicalTrials") || [];
+
+  if (!trials.length) return <p>No trials found.</p>;
 
   return (
-    <ol className="insight-list">
-      {summary.key_findings.map((finding) => (
-        <li key={finding}>{finding}</li>
+    <ul>
+      {trials.map((t, i) => (
+        <li key={i}>{t.title}</li>
       ))}
-    </ol>
+    </ul>
   );
 }
 
-function SummaryBlock({ summary, results = [] }) {
-  if (!summary) {
-    return null;
-  }
+function SummaryBlock({ summary, results }) {
+  if (!summary) return null;
 
   return (
-    <div className="summary-report">
-      <section className="summary-section">
-        <h3>Condition Overview</h3>
-        <p>{summary.overview}</p>
-      </section>
+    <div style={styles.card}>
+      <Section title="🩺 Condition Overview">
+        <p>{summary.overview || "No overview available."}</p>
+      </Section>
 
-      <section className="summary-section">
-        <h3>Research Insights</h3>
-        <ResearchInsights summary={summary} />
-      </section>
-
-      <section className="summary-section">
-        <h3>Clinical Trials</h3>
-        <ClinicalTrials summary={summary} results={results} />
-      </section>
-
-      <section className="summary-section">
-        <h3>Sources</h3>
+      <Section title="📚 Research Insights">
         <ul>
-          {summary.sources?.map((source) => (
-            <li key={source}>{source}</li>
-          ))}
+          {summary.key_findings?.map((k, i) => (
+            <li key={i}>{k}</li>
+          )) || <p>No insights found.</p>}
         </ul>
-      </section>
+      </Section>
+
+      <Section title="🧪 Clinical Trials">
+        <Trials results={results} />
+      </Section>
+
+      <Section title="🔗 Sources">
+        <Sources sources={summary.sources} />
+      </Section>
     </div>
   );
 }
 
 function ChatMessage({ message }) {
-  const isUser = message.role === 'user';
+  const isUser = message.role === "user";
 
   return (
-    <article className={`message ${isUser ? 'message-user' : 'message-assistant'}`}>
-      <div className="avatar" aria-hidden="true">{isUser ? 'Y' : 'C'}</div>
-      <div className="message-body">
-        <div className="message-meta">{isUser ? 'You' : 'Curalink'}</div>
-        {message.content && <p>{message.content}</p>}
-        {message.memoryNote && <p className="memory-note">{message.memoryNote}</p>}
-        <SummaryBlock summary={message.summary} results={message.results} />
-      </div>
-    </article>
-  );
-}
-
-function LoadingMessage() {
-  return (
-    <article className="message message-assistant loading-message">
-      <div className="avatar" aria-hidden="true">C</div>
-      <div className="message-body loading-body">
-        <div className="spinner" aria-hidden="true" />
-        <div>
-          <div className="message-meta">Curalink</div>
-          <p>Fetching papers, checking trials, and summarizing the strongest matches...</p>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="empty-state">
-      <div className="avatar avatar-large" aria-hidden="true">C</div>
-      <div>
-        <div className="message-meta">Curalink</div>
-        <p>Start with a condition, then ask follow-ups like latest treatments, trial locations, or risk factors.</p>
-      </div>
+    <div style={{ ...styles.message, ...(isUser ? styles.user : styles.bot) }}>
+      <b>{isUser ? "You" : "Curalink"}</b>
+      <p>{message.content}</p>
+      <SummaryBlock summary={message.summary} results={message.results} />
     </div>
   );
 }
 
+/* ------------------ MAIN APP ------------------ */
+
 function App() {
   const [messages, setMessages] = useState(starterMessages);
-  const [query, setQuery] = useState('');
-  const [rememberedDisease, setRememberedDisease] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const messageListRef = useRef(null);
+  const [query, setQuery] = useState("");
+  const [disease, setDisease] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const ref = useRef(null);
 
   useEffect(() => {
-    const messageList = messageListRef.current;
+    ref.current?.scrollTo(0, ref.current.scrollHeight);
+  }, [messages, loading]);
 
-    if (!messageList) {
-      return;
-    }
+  async function send() {
+    if (!query.trim() || loading) return;
 
-    messageList.scrollTo({
-      top: messageList.scrollHeight,
-      behavior: 'smooth'
-    });
-  }, [messages, isLoading]);
+    const effectiveQuery = buildQuery(query, disease);
+    const inferred = inferDisease(query);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+    setMessages(prev => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", content: query }
+    ]);
 
-    const trimmedQuery = query.trim();
-
-    if (!trimmedQuery || isLoading) {
-      return;
-    }
-
-    const effectiveQuery = buildEffectiveQuery(trimmedQuery, rememberedDisease);
-    const inferredDisease = inferDisease(trimmedQuery);
-    const memoryNote = effectiveQuery !== trimmedQuery
-      ? `Using previous disease context: ${rememberedDisease}.`
-      : '';
-    const userMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: trimmedQuery,
-      memoryNote
-    };
-
-    setMessages((currentMessages) => [...currentMessages, userMessage]);
-    setQuery('');
-    setError('');
-    setIsLoading(true);
+    setLoading(true);
+    setQuery("");
 
     try {
-      const { data } = await api.post('/chat', { query: effectiveQuery });
+      const { data } = await api.post("/chat", {
+        query: effectiveQuery
+      });
 
-      setMessages((currentMessages) => [
-        ...currentMessages,
+      setMessages(prev => [
+        ...prev,
         {
           id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Found ${data.results?.length || 0} ranked sources for "${data.query}".`,
+          role: "assistant",
+          content: `Found ${data.results?.length || 0} sources.`,
           summary: data.summary,
-          results: data.results || []
+          results: data.results
         }
       ]);
 
-      if (effectiveQuery === trimmedQuery && inferredDisease) {
-        setRememberedDisease(inferredDisease);
-      }
-    } catch (requestError) {
-      const message = requestError.response?.data?.message
-        || requestError.response?.data?.error
-        || 'Unable to reach the research API.';
+      if (inferred) setDisease(inferred);
 
-      setError(message);
-    } finally {
-      setIsLoading(false);
+    } catch (e) {
+      setError("Backend error");
     }
+
+    setLoading(false);
   }
 
   return (
-    <main className="chat-shell">
-      <header className="chat-header">
-        <div>
-          <p className="eyebrow">Curalink Research Chat</p>
-          <h1>Clinical evidence, summarized fast.</h1>
-        </div>
-        <div className="status-badge">
-          <span />
-          {rememberedDisease ? `Context: ${rememberedDisease}` : 'Live research'}
-        </div>
-      </header>
+    <div style={styles.container}>
+      <h1>Curalink AI</h1>
 
-      <section className="chat-panel" aria-label="Chat messages">
-        <div className="message-list" ref={messageListRef}>
-          {messages.length === 0 && <EmptyState />}
-          {messages.map((message) => (
-            <ChatMessage key={message.id} message={message} />
-          ))}
-          {isLoading && <LoadingMessage />}
-        </div>
-      </section>
+      <div ref={ref} style={styles.chat}>
+        {messages.map(m => (
+          <ChatMessage key={m.id} message={m} />
+        ))}
 
-      <form className="chat-form" onSubmit={handleSubmit}>
-        <label htmlFor="query">Research query</label>
-        <div className="input-row">
-          <input
-            id="query"
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            disabled={isLoading}
-            placeholder="Try diabetes, migraine, asthma treatment..."
-          />
-          <button type="submit" disabled={isLoading || !query.trim()}>
-            {isLoading ? 'Searching' : 'Send'}
-          </button>
-        </div>
-        {isLoading && <p className="loading-hint">Searching medical literature and trials...</p>}
-        {error && <p className="error-message">{error}</p>}
-      </form>
-    </main>
+        {loading && <p>🔄 Fetching research...</p>}
+      </div>
+
+      <div style={styles.inputRow}>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Ask about disease, treatment, trials..."
+          style={styles.input}
+        />
+        <button onClick={send} style={styles.button}>
+          Send
+        </button>
+      </div>
+
+      {error && <p style={{ color: "red" }}>{error}</p>}
+    </div>
   );
 }
+
+/* ------------------ STYLES ------------------ */
+
+const styles = {
+  container: { padding: 20, fontFamily: "Arial" },
+  chat: {
+    height: 400,
+    overflowY: "auto",
+    border: "1px solid #ddd",
+    padding: 10,
+    marginBottom: 10
+  },
+  message: {
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 8
+  },
+  user: { background: "#e3f2fd" },
+  bot: { background: "#f5f5f5" },
+  inputRow: { display: "flex", gap: 10 },
+  input: { flex: 1, padding: 10 },
+  button: { padding: 10 },
+  card: { marginTop: 10, padding: 10, background: "#fff" },
+  section: { marginBottom: 10 },
+  sectionTitle: { marginBottom: 5 }
+};
 
 export default App;

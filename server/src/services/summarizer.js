@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const MODEL = "llama3-70b-8192";
+const MODEL = "llama3-8b-8192";
 
 let groq = null;
 

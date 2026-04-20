@@ -7,17 +7,16 @@ const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// Health route
+/* ------------------ HEALTH ROUTE ------------------ */
 app.get('/', (req, res) => {
   res.send("Server is running 🚀");
 });
 
-// 🔥 Fetch PubMed data
+/* ------------------ PUBMED FETCH ------------------ */
 async function fetchPubMed(query) {
   try {
-    // Step 1: Search IDs
     const searchRes = await fetch(
-      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmode=json&retmax=25`
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmode=json&retmax=20`
     );
 
     const searchData = await searchRes.json();
@@ -25,7 +24,6 @@ async function fetchPubMed(query) {
 
     if (!ids.length) return [];
 
-    // Step 2: Fetch details
     const fetchRes = await fetch(
       `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(",")}&retmode=json`
     );
@@ -41,26 +39,22 @@ async function fetchPubMed(query) {
         authors: item.authors?.map(a => a.name).join(", "),
         journal: item.fulljournalname,
         date: item.pubdate,
-        link: `https://pubmed.ncbi.nlm.nih.gov/${id}/`
+        year: new Date(item.pubdate).getFullYear() || 2023,
+        link: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
+        source: "PubMed"
       };
     });
 
-    // 🔥 SMART FILTER (keyword-based)
+    // 🔥 Keyword filtering
     const keywords = query.toLowerCase().split(" ");
-
     papers = papers.filter(p =>
-      keywords.some(word =>
-        p.title.toLowerCase().includes(word)
-      )
+      keywords.some(word => p.title.toLowerCase().includes(word))
     );
 
-    // 🔥 SORT (latest first)
-    papers.sort((a, b) => new Date(b.date) - new Date(a.date));
+    // 🔥 Sort latest first
+    papers.sort((a, b) => b.year - a.year);
 
-    // 🔥 LIMIT RESULTS
-    papers = papers.slice(0, 5);
-
-    return papers;
+    return papers.slice(0, 8);
 
   } catch (error) {
     console.error("PubMed error:", error);
@@ -68,48 +62,95 @@ async function fetchPubMed(query) {
   }
 }
 
-// 🔥 Chat route
+/* ------------------ CLINICAL TRIALS ------------------ */
+async function fetchTrials(query) {
+  try {
+    const res = await fetch(
+      `https://clinicaltrials.gov/api/v2/studies?query.cond=${encodeURIComponent(query)}&pageSize=10&format=json`
+    );
+
+    const data = await res.json();
+
+    return data.studies.map(trial => ({
+      title: trial.protocolSection.identificationModule.briefTitle,
+      status: trial.protocolSection.statusModule.overallStatus,
+      source: "ClinicalTrials",
+      year: 2024
+    }));
+
+  } catch (error) {
+    console.error("Trials error:", error);
+    return [];
+  }
+}
+
+/* ------------------ RANKING ------------------ */
+function rankResults(data) {
+  return data.sort((a, b) => (b.year || 0) - (a.year || 0));
+}
+
+/* ------------------ CHAT ROUTE ------------------ */
 app.post('/chat', async (req, res) => {
   const { query } = req.body;
 
-  console.log("Received query:", query);
+  console.log("Query:", query);
 
   if (!query) {
     return res.json({
-      query: "No query",
-      results: [],
       summary: {
         overview: "No query provided",
         key_findings: [],
-        trials: [],
         sources: []
-      }
+      },
+      results: []
     });
   }
 
-  const papers = await fetchPubMed(query);
+  try {
+    // 🔥 Fetch data in parallel
+    const [papers, trials] = await Promise.all([
+      fetchPubMed(query),
+      fetchTrials(query)
+    ]);
 
-  res.json({
-    query,
-    results: papers,
+    const combined = [...papers, ...trials];
 
-    summary: {
-      overview: `Here are the latest research insights on "${query}" based on recent PubMed publications.`,
+    const ranked = rankResults(combined);
 
-      key_findings: papers.map((p, i) =>
-        `${i + 1}. ${p.title} — This study provides insights related to ${query}, including diagnosis, treatment, or associated conditions.`
+    const topResults = ranked.slice(0, 10);
+
+    /* ------------------ SUMMARY ------------------ */
+    const summary = {
+      overview: `This summary is based on recent medical research related to "${query}". It highlights important findings, treatments, and ongoing clinical trials.`,
+
+      key_findings: papers.slice(0, 5).map((p, i) =>
+        `${i + 1}. ${p.title} — Study discusses aspects of ${query}, including treatment approaches or clinical outcomes.`
       ),
-
-      trials: [],
 
       sources: papers.map(p =>
         `${p.journal} (${p.date})`
       )
-    }
-  });
+    };
+
+    res.json({
+      summary,
+      results: topResults
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      summary: {
+        overview: "Error fetching research data",
+        key_findings: [],
+        sources: []
+      },
+      results: []
+    });
+  }
 });
 
-// Start server
+/* ------------------ SERVER START ------------------ */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

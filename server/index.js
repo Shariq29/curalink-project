@@ -13,7 +13,8 @@ const clientOrigins = process.env.CLIENT_ORIGINS?.split(',').map(o => o.trim());
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || clientOrigins?.includes(origin)) {
+    // Allow request if no origin (Postman/Server-to-Server), if origins aren't defined (local dev fallback), or if matched
+    if (!origin || !clientOrigins || clientOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));

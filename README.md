@@ -65,12 +65,12 @@ npm run dev
 
 Frontend: `http://localhost:5173`
 
-Backend health check: `http://localhost:5000/api/health`
+Backend health check: `http://localhost:5001/`
 
 Chat endpoint:
 
 ```bash
-curl -X POST http://localhost:5000/chat \
+curl -X POST http://localhost:5001/chat \
   -H "Content-Type: application/json" \
   -d "{\"query\":\"diabetes\"}"
 ```

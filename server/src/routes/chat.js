@@ -80,6 +80,7 @@ router.post('/', async (req, res) => {
     console.error("[POST /chat] Fatal Error:", error);
 
     return res.status(500).json({
+      message: error.message || "Something went wrong while fetching research data.",
       summary: {
         overview: "Something went wrong while fetching research data.",
         key_findings: [],

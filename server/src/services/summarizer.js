@@ -20,30 +20,27 @@ function buildPrompt(query, context) {
   const contextString = context
     .map(
       (item) => `
-- Title: ${item.title}
-- Source: ${item.source}
-- Year: ${item.year}
-- Summary: ${item.summary || item.abstract || "N/A"}`
+- ${item.title} (${item.year}) [${item.source}]
+${item.summary || item.abstract || "No summary"}`
     )
     .join("\n");
 
   return `
 You are a medical research assistant.
 
-User Query: ${query}
+User asked: "${query}"
 
-Use ONLY the data below.
+Based ONLY on the data below, explain clearly:
 
+1. What is the condition
+2. Key research insights
+3. Any clinical trials
+4. Mention sources
+
+Keep answer structured and clear.
+
+DATA:
 ${contextString}
-
-Return STRICT JSON:
-{
-  "overview": "...",
-  "key_findings": ["...", "..."],
-  "sources": ["..."]
-}
-
-NO text outside JSON.
 `;
 }
 
@@ -98,7 +95,14 @@ export async function summarizeResults(query, context) {
 
     console.log("✅ GROQ SUCCESS");
 
-    return parsed;
+    return {
+      overview: content.slice(0, 300),
+      key_findings: content
+        .split("\n")
+        .filter(line => line.trim().length > 20)
+        .slice(0, 5),
+      sources: context.map(c => `${c.source} (${c.year || "N/A"})`)
+    };
 
   } catch (error) {
     console.error("❌ GROQ ERROR:", error.message);
